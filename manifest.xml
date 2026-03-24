@@ -5,11 +5,11 @@
         minSdkVersion="6.2.0">
 
         <iq:products>
-            <!-- Fenix 8 series -->
-            <iq:product id="fenix8"/>
+            <!-- Fenix 8 series (AMOLED: 416x416 / 454x454, Solar MIP: 260x260 / 280x280) -->
+            <iq:product id="fenix843mm"/>
             <iq:product id="fenix847mm"/>
-            <iq:product id="fenix8solar"/>
             <iq:product id="fenix8solar47mm"/>
+            <iq:product id="fenix8solar51mm"/>
             <!-- Fenix 7 series (broad compatibility) -->
             <iq:product id="fenix7"/>
             <iq:product id="fenix7s"/>

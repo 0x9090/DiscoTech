@@ -10,7 +10,7 @@ picks that up.
 
 ## Supported Devices
 
-- **Fenix 8** series (Fenix 8, Fenix 8 Solar, 47mm variants)
+- **Fenix 8** series (43mm/47mm AMOLED, Solar 47mm/51mm MIP)
 - **Fenix 7** series (standard, S, X, Pro variants)
 - **Epix 2** / Epix Pro series
 - **Enduro 3**
