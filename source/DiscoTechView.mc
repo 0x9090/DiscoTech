@@ -116,12 +116,26 @@ class DiscoTechView extends WatchUi.View {
     }
 
     function onShow() as Void {
-        // Register accelerometer sensor
+        // Try high-frequency batched accelerometer first (25Hz, better for beat detection)
         try {
-            Sensor.setEnabledSensors([Sensor.SENSOR_ACCELEROMETER]);
-            Sensor.enableSensorEvents(method(:onSensor));
+            Sensor.registerSensorDataListener(
+                method(:onSensorData),
+                {
+                    :period => 1,
+                    :accelerometer => {
+                        :enabled => true,
+                        :sampleRate => 25
+                    }
+                }
+            );
         } catch (e) {
-            // Sensor may not be available; patterns still animate
+            // Fall back to simple sensor events on older devices
+            try {
+                Sensor.setEnabledSensors([Sensor.SENSOR_ACCELEROMETER]);
+                Sensor.enableSensorEvents(method(:onSensor));
+            } catch (e2) {
+                // No accelerometer; patterns still animate at base intensity
+            }
         }
 
         // Start animation timer at ~30fps
@@ -135,24 +149,86 @@ class DiscoTechView extends WatchUi.View {
             _timer = null;
         }
         try {
+            Sensor.unregisterSensorDataListener();
+        } catch (e) {
+            // Ignore
+        }
+        try {
             Sensor.enableSensorEvents(null);
         } catch (e) {
             // Ignore
         }
     }
 
-    //! Accelerometer callback - detect vibrations as proxy for bass.
+    //! High-frequency batched accelerometer callback (25Hz).
+    //! Analyzes variance across samples to detect bass vibration patterns.
+    function onSensorData(sensorData as Sensor.SensorData) as Void {
+        var accelData = sensorData.accelerometerData;
+        if (accelData == null) {
+            return;
+        }
+        var xArr = accelData.x;
+        var yArr = accelData.y;
+        var zArr = accelData.z;
+        if (xArr == null || yArr == null || zArr == null) {
+            return;
+        }
+
+        var count = xArr.size();
+        if (count == 0) {
+            return;
+        }
+
+        // Compute magnitude variance across samples — high variance = vibration/bass
+        var sumMag = 0.0;
+        var sumMagSq = 0.0;
+        var maxDelta = 0.0;
+        var prevMag = 0.0;
+
+        for (var i = 0; i < count; i++) {
+            var x = xArr[i].toFloat();
+            var y = yArr[i].toFloat();
+            var z = zArr[i].toFloat();
+            var mag = Math.sqrt(x * x + y * y + z * z).toFloat();
+            sumMag += mag;
+            sumMagSq += mag * mag;
+
+            // Track sample-to-sample delta (high-frequency energy)
+            if (i > 0) {
+                var delta = (mag - prevMag).abs();
+                if (delta > maxDelta) {
+                    maxDelta = delta;
+                }
+            }
+            prevMag = mag;
+        }
+
+        // Variance of magnitude reveals vibration energy
+        var mean = sumMag / count;
+        var variance = (sumMagSq / count) - (mean * mean);
+        if (variance < 0) { variance = 0.0; } // floating point guard
+
+        // Combine variance (sustained vibration) with peak delta (transient hits)
+        // Normalize: variance of ~10000 is moderate bass, ~50000+ is heavy
+        var varEnergy = Math.sqrt(variance).toFloat() / 200.0;
+        var deltaEnergy = maxDelta / 500.0;
+        var combined = varEnergy * 0.6 + deltaEnergy * 0.4;
+        if (combined > 1.0) {
+            combined = 1.0;
+        }
+        _energy = combined;
+    }
+
+    //! Simple sensor callback (fallback for devices without registerSensorDataListener).
     function onSensor(info as Sensor.Info) as Void {
         if (info has :accel && info.accel != null) {
             var accel = info.accel;
-            // Calculate magnitude of acceleration vector
             var x = accel[0].toFloat();
             var y = accel[1].toFloat();
             var z = accel[2].toFloat();
             var mag = Math.sqrt(x * x + y * y + z * z).toFloat();
 
             // Normalize: resting gravity ~1000 mG, vibrations add to that
-            // Subtract gravity baseline and normalize to 0..1
             var deviation = (mag - 980.0).abs() / 500.0;
             if (deviation > 1.0) {
                 deviation = 1.0;
